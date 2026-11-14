@@ -1,8 +1,6 @@
 streamlit
-pandas
-plotly
-Pillow
-paho-mqtt
+paho-mqtt<2.0.0
 SpeechRecognition
-pytesseract
 gTTS
+pytesseract
+Pillow
