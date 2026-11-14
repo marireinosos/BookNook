@@ -1,0 +1,8 @@
+streamlit
+pandas
+plotly
+Pillow
+paho-mqtt
+SpeechRecognition
+pytesseract
+gTTS
