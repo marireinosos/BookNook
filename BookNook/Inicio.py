@@ -1,148 +1,154 @@
 import streamlit as st
 import paho.mqtt.client as mqtt
+import pandas as pd
 import json
+import os
 
-st.set_page_config(page_title="BookNook | Sanctuary", page_icon="🦢", layout="wide")
+st.set_page_config(page_title="BookNook | Cada página cuenta", page_icon="✨", layout="wide")
 
-# --- DISEÑO CSS EDITORIAL (DARK ACADEMIA / COZY LATTE / GIRLY) ---
+# --- CREACIÓN AUTOMÁTICA DE ARCHIVOS CSV (Capítulo 6 de la Propuesta) ---
+os.makedirs("data", exist_ok=True)
+
+if not os.path.exists("data/libros.csv"):
+    df_init_libros = pd.DataFrame([
+        {"titulo": "María", "autor": "Jorge Isaacs", "genero": "Romance", "estante": "Leyendo", "estrellas": 5, "portada": "https://images.unsplash.com/photo-1544947950-fa07a98d237f?auto=format&fit=crop&w=600&q=80"},
+        {"titulo": "A Court of Thorns and Roses", "autor": "Sarah J. Maas", "genero": "Fantasía", "estante": "Leídos", "estrellas": 5, "portada": "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=600&q=80"},
+        {"titulo": "Dead Letters", "autor": "Mari Reinoso", "genero": "Romance", "estante": "Leyendo", "estrellas": 5, "portada": "https://images.unsplash.com/photo-1512820790803-83ca734da794?auto=format&fit=crop&w=600&q=80"},
+        {"titulo": "Dune", "autor": "Frank Herbert", "genero": "Ciencia ficción", "estante": "Leídos", "estrellas": 4, "portada": "https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=600&q=80"},
+        {"titulo": "Drácula", "autor": "Bram Stoker", "genero": "Misterio y terror", "estante": "Quiero leer", "estrellas": 5, "portada": "https://images.unsplash.com/photo-1509198397868-475647b2a1e5?auto=format&fit=crop&w=600&q=80"},
+        {"titulo": "Orgullo y Prejuicio", "autor": "Jane Austen", "genero": "Romance", "estante": "Leídos", "estrellas": 5, "portada": "https://images.unsplash.com/photo-1495446815901-a7297e633e8d?auto=format&fit=crop&w=600&q=80"},
+        {"titulo": "El Nombre del Viento", "autor": "Patrick Rothfuss", "genero": "Fantasía", "estante": "Leídos", "estrellas": 5, "portada": "https://images.unsplash.com/photo-1532012197267-da84d127e765?auto=format&fit=crop&w=600&q=80"},
+        {"titulo": "Frankenstein", "autor": "Mary Shelley", "genero": "Misterio y terror", "estante": "Leídos", "estrellas": 4, "portada": "https://images.unsplash.com/photo-1543002588-bfa74002ed7e?auto=format&fit=crop&w=600&q=80"},
+        {"titulo": "Cien años de soledad", "autor": "Gabriel García Márquez", "genero": "Fantasía", "estante": "Leídos", "estrellas": 5, "portada": "https://images.unsplash.com/photo-1476275466078-4007374efbbe?auto=format&fit=crop&w=600&q=80"},
+        {"titulo": " Pedro Páramo", "autor": "Juan Rulfo", "genero": "Misterio y terror", "estante": "Leídos", "estrellas": 5, "portada": "https://images.unsplash.com/photo-1519682337058-a94d519337bc?auto=format&fit=crop&w=600&q=80"}
+    ])
+    df_init_libros.to_csv("data/libros.csv", index=False)
+
+if not os.path.exists("data/sesiones.csv"):
+    df_init_ses = pd.DataFrame([
+        {"fecha": "10 Nov", "libro": "María", "minutos": 25},
+        {"fecha": "11 Nov", "libro": "María", "minutos": 40},
+        {"fecha": "12 Nov", "libro": "Dead Letters", "minutos": 30},
+        {"fecha": "13 Nov", "libro": "María", "minutos": 35}
+    ])
+    df_init_ses.to_csv("data/sesiones.csv", index=False)
+
+if not os.path.exists("data/citas.csv"):
+    df_init_citas = pd.DataFrame([
+        {"libro": "María - Jorge Isaacs", "cita": "Era yo niño aún cuando me alejaron de la casa paterna para que diera principio a mis estudios..."}
+    ])
+    df_init_citas.to_csv("data/citas.csv", index=False)
+
+# --- ESTILO VISUAL: PALETA BEIGE, PALO DE ROSA Y CAFÉ (IGUAL AL PDF) ---
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,400&family=Plus+Jakarta+Sans:wght@300;400;500;600&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;1,400&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
 
     .stApp {
-        background: radial-gradient(circle at top right, #FDFBF7 0%, #F4EBE1 55%, #E8D8C8 100%);
-        color: #3B281E;
+        background: radial-gradient(circle at top, #FBF7F2 0%, #F3EAE0 60%, #EADBC8 100%);
+        color: #4A332D;
         font-family: 'Plus Jakarta Sans', sans-serif;
     }
-
     section[data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #2C1D14 0%, #3E2A1E 100%) !important;
-        border-right: 2px solid #C89F81;
+        background: linear-gradient(180deg, #4A332D 0%, #36221C 100%) !important;
+        border-right: 3px solid #B5838D;
     }
     section[data-testid="stSidebar"] * {
-        color: #F7EFE6 !important;
-        font-family: 'Plus Jakarta Sans', sans-serif;
+        color: #FBF7F2 !important;
     }
-
-    h1, h2, h3, .serif-title {
-        font-family: 'Cormorant Garamond', serif !important;
-        color: #2C1D14 !important;
-        letter-spacing: -0.02em;
+    h1, h2, h3 {
+        font-family: 'Playfair Display', serif !important;
+        color: #4A332D !important;
     }
-
-    /* Hero Banner con imagen estética */
-    .hero-banner {
-        position: relative;
-        background-image: linear-gradient(90deg, rgba(44, 29, 20, 0.82) 0%, rgba(44, 29, 20, 0.45) 100%), 
-                          url('https://images.unsplash.com/photo-1507842229356-51c61504d3ab?auto=format&fit=crop&w=1400&q=80');
+    .hero-box {
+        background: linear-gradient(135deg, rgba(74, 51, 45, 0.88) 0%, rgba(181, 131, 141, 0.82) 100%),
+                    url('https://images.unsplash.com/photo-1519682337058-a94d519337bc?auto=format&fit=crop&w=1400&q=80');
         background-size: cover;
         background-position: center;
-        border-radius: 26px;
-        padding: 52px 45px;
-        color: #FDFBF7 !important;
-        box-shadow: 0 18px 40px rgba(44, 29, 20, 0.18);
-        margin-bottom: 30px;
-        border: 1px solid rgba(255, 255, 255, 0.3);
+        border-radius: 28px;
+        padding: 48px 42px;
+        color: #FBF7F2 !important;
+        box-shadow: 0 18px 40px rgba(74, 51, 45, 0.18);
+        border: 2px solid #D4AF37;
+        margin-bottom: 28px;
+        text-align: center;
     }
-    .hero-banner h1 {
-        color: #FDFBF7 !important;
-        font-size: 3.4rem !important;
-        margin-bottom: 8px;
-    }
-    .hero-badge {
+    .hero-box h1 { color: #FBF7F2 !important; font-size: 3.3rem !important; margin-bottom: 6px; }
+    .pill-tag {
         display: inline-block;
-        background: rgba(212, 163, 115, 0.35);
-        backdrop-filter: blur(6px);
-        border: 1px solid #E6CCB2;
-        color: #FFF8F0;
-        padding: 6px 16px;
-        border-radius: 30px;
-        font-size: 0.8rem;
+        background-color: #B5838D;
+        color: #FFF !important;
+        padding: 6px 18px;
+        border-radius: 25px;
+        font-size: 0.82rem;
+        font-weight: 600;
+        letter-spacing: 0.08em;
         text-transform: uppercase;
-        letter-spacing: 0.12em;
-        margin-bottom: 15px;
+        border: 1px solid #F3EAE0;
+        margin-bottom: 14px;
     }
-
-    /* Tarjetas Glassmorphism */
-    .luxe-card {
-        background: rgba(255, 252, 248, 0.78);
-        backdrop-filter: blur(12px);
-        border: 1px solid #E6D7C3;
+    .card-cozy {
+        background: #FFFDF9;
+        border: 1.5px solid #E2D0BE;
+        border-top: 5px solid #B5838D;
         border-radius: 22px;
-        padding: 26px;
-        box-shadow: 0 10px 30px rgba(74, 53, 37, 0.07);
-        transition: transform 0.25s ease, box-shadow 0.25s ease;
+        padding: 24px;
+        box-shadow: 0 10px 25px rgba(74, 51, 45, 0.06);
         height: 100%;
     }
-    .luxe-card:hover {
-        transform: translateY(-4px);
-        box-shadow: 0 16px 35px rgba(74, 53, 37, 0.13);
-        border-color: #C89F81;
-    }
-
-    .metric-pill {
-        background: linear-gradient(135deg, #FFFDF9 0%, #F3E5D8 100%);
-        border: 1px solid #DECBB7;
-        border-radius: 18px;
-        padding: 18px 22px;
+    .kpi-card {
+        background: linear-gradient(135deg, #FFFDF9 0%, #F7EDE4 100%);
+        border: 1.5px solid #D8C2B0;
+        border-radius: 20px;
+        padding: 18px;
         text-align: center;
-        box-shadow: 0 4px 15px rgba(59, 40, 30, 0.05);
+        box-shadow: 0 6px 16px rgba(74, 51, 45, 0.05);
     }
-    .metric-number {
-        font-family: 'Cormorant Garamond', serif;
-        font-size: 2.3rem;
+    .kpi-val {
+        font-family: 'Playfair Display', serif;
+        font-size: 2.2rem;
         font-weight: 700;
-        color: #6F4E37;
-        line-height: 1.1;
+        color: #B5838D;
     }
-
     .stButton > button {
-        background: linear-gradient(135deg, #8C624C 0%, #5E3A24 100%) !important;
-        color: #FFFDF9 !important;
-        border: 1px solid #D4A373 !important;
+        background: linear-gradient(135deg, #B5838D 0%, #8E5B66 100%) !important;
+        color: #FFFFFF !important;
+        border: 1px solid #D4AF37 !important;
         border-radius: 30px !important;
-        padding: 10px 28px !important;
-        font-weight: 500 !important;
-        letter-spacing: 0.03em;
-        box-shadow: 0 6px 18px rgba(94, 58, 36, 0.28) !important;
-    }
-    .stButton > button:hover {
-        background: linear-gradient(135deg, #A4755D 0%, #6E452C 100%) !important;
-        transform: scale(1.02);
+        padding: 10px 26px !important;
+        font-weight: 600 !important;
+        box-shadow: 0 6px 15px rgba(181, 131, 141, 0.35) !important;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# --- ESTADO GLOBAL Y MEMORIA DE BOOKNOOK ---
-if 'libros' not in st.session_state:
-    st.session_state['libros'] = [
-        {"titulo": "A Court of Thorns and Roses", "autor": "Sarah J. Maas", "genero": "Fantasía / Romance", "progreso": 85, "estrellas": 5, "portada": "https://images.unsplash.com/photo-1544947950-fa07a98d237f?auto=format&fit=crop&w=600&q=80"},
-        {"titulo": "Dead Letters (Borrador)", "autor": "Mariana R.", "genero": "Indie Rock / Drama", "progreso": 60, "estrellas": 5, "portada": "https://images.unsplash.com/photo-1512820790803-83ca734da794?auto=format&fit=crop&w=600&q=80"},
-        {"titulo": " La Biblioteca de la Medianoche", "autor": "Matt Haig", "genero": "Ficción", "progreso": 100, "estrellas": 4, "portada": "https://images.unsplash.com/photo-1495446815901-a7297e633e8d?auto=format&fit=crop&w=600&q=80"}
-    ]
-if 'minutos_leidos' not in st.session_state:
-    st.session_state['minutos_leidos'] = 145
-if 'estado_sesion' not in st.session_state:
-    st.session_state['estado_sesion'] = "En espera"
-if 'calificacion_fisica' not in st.session_state:
-    st.session_state['calificacion_fisica'] = 5
-
-# --- CONEXIÓN MQTT BIDIRECCIONAL CON WOKWI ---
-broker = "broker.mqttdashboard.com"
-port = 1883
+# --- MEMORIA DE ESTADOS Y CONEXIÓN MQTT ---
+if 'evento_wokwi' not in st.session_state:
+    st.session_state['evento_wokwi'] = "Esperando botón físico..."
+if 'minutos_hoy' not in st.session_state:
+    st.session_state['minutos_hoy'] = 35
+if 'estrellas_perilla' not in st.session_state:
+    st.session_state['estrellas_perilla'] = 5
+if 'libro_actual' not in st.session_state:
+    st.session_state['libro_actual'] = "María"
 
 def on_connect(client, userdata, flags, rc):
     client.subscribe("booknook/estacion")
 
 def on_message(client, userdata, msg):
     payload = msg.payload.decode()
-    st.session_state['ultimo_mensaje'] = payload
+    st.session_state['raw_mqtt'] = payload
     try:
-        datos = json.loads(payload)
-        if "evento" in datos:
-            st.session_state['estado_sesion'] = "📖 Leyendo ahora" if datos["evento"] == "inicio" else "⏸️ Sesión en pausa"
-        if "estrellas" in datos:
-            st.session_state['calificacion_fisica'] = datos["estrellas"]
+        data = json.loads(payload)
+        if "evento" in data:
+            if data["evento"] == "inicio":
+                st.session_state['evento_wokwi'] = "⏱️ Cronómetro corriendo"
+            elif data["evento"] == "fin":
+                mins = data.get("minutos", 35)
+                st.session_state['minutos_hoy'] = mins
+                st.session_state['evento_wokwi'] = f"✅ Terminado ({mins} min)"
+        if "estrellas" in data:
+            st.session_state['estrellas_perilla'] = int(data["estrellas"])
     except:
         pass
 
@@ -151,104 +157,104 @@ if 'mqtt_client' not in st.session_state:
         client = mqtt.Client()
         client.on_connect = on_connect
         client.on_message = on_message
-        client.connect(broker, port, 60)
+        client.connect("broker.mqttdashboard.com", 1883, 60)
         client.loop_start()
         st.session_state['mqtt_client'] = client
-        mqtt_status = "🟢 Estación Física Wokwi Sincronizada"
-    except Exception as e:
-        mqtt_status = "🔴 Modo desconectado"
+        estado_red = "🟢 Estación Wokwi Conectada · broker.mqttdashboard.com"
+    except:
+        estado_red = "🔴 Reconectando MQTT..."
 else:
-    mqtt_status = "🟢 Estación Física Wokwi Sincronizada"
+    estado_red = "🟢 Estación Wokwi Conectada · broker.mqttdashboard.com"
 
-# --- HERO BANNER ---
+# --- BANNER DE PORTADA ---
 st.markdown(f"""
-<div class="hero-banner">
-    <div class="hero-badge">{mqtt_status}</div>
-    <h1>BookNook Sanctuary 🦢☕</h1>
-    <p style="font-size: 1.15rem; max-width: 650px; opacity: 0.95; font-weight: 300; line-height: 1.6;">
-        Tu refugio literario inteligente. Sincroniza tu lámpara física, ambienta tu espacio 
-        con comandos de voz y transforma tus páginas impresas en audiolibros al instante.
+<div class="hero-box">
+    <div class="pill-tag">{estado_red}</div>
+    <h1>✨ BookNook ✨</h1>
+    <p style="font-size: 1.35rem; font-style: italic; margin-bottom: 10px;">
+        "Tu rincón donde los libros cobran vida · Porque cada página cuenta"
+    </p>
+    <p style="font-size: 0.98rem; max-width: 680px; margin: 0 auto; opacity: 0.95;">
+        Una estación de lectura en Wokwi que crea el ambiente de tu libro y cuenta cada minuto, 
+        conectada por MQTT a tu app que te lee cualquier página en voz alta.
     </p>
 </div>
 """, unsafe_allow_html=True)
 
-# --- MÉTRICAS DEL RINCÓN DE LECTURA ---
-c1, c2, c3, c4 = st.columns(4)
-with c1:
+# --- INDICADORES EN VIVO (RF7, RF10, RF11) ---
+df_libros = pd.read_csv("data/libros.csv")
+leidos_count = len(df_libros[df_libros["estante"] == "Leídos"])
+
+k1, k2, k3, k4 = st.columns(4)
+with k1:
     st.markdown(f"""
-    <div class="metric-pill">
-        <div style="font-size:0.8rem; text-transform:uppercase; letter-spacing:0.08em; color:#8C624C;">Estado Estación</div>
-        <div class="metric-number" style="font-size:1.5rem; margin-top:6px;">{st.session_state['estado_sesion']}</div>
+    <div class="kpi-card">
+        <div style="font-size:0.8rem; font-weight:600; color:#6D4C41;">LIBRO EN ESTACIÓN (LCD)</div>
+        <div class="kpi-val">{st.session_state['libro_actual']}</div>
+        <div style="font-size:0.8rem; color:#8D6E63;">{st.session_state['evento_wokwi']}</div>
+    </div>
+    """, unsafe_allow_html=True)
+with k2:
+    st.markdown(f"""
+    <div class="kpi-card">
+        <div style="font-size:0.8rem; font-weight:600; color:#6D4C41;">HOY HAS LEÍDO</div>
+        <div class="kpi-val">{st.session_state['minutos_hoy']} min</div>
+        <div style="font-size:0.8rem; color:#2E7D32;">🎯 Meta diaria: 30 min ¡Cumplida!</div>
+    </div>
+    """, unsafe_allow_html=True)
+with k3:
+    st.markdown(f"""
+    <div class="kpi-card">
+        <div style="font-size:0.8rem; font-weight:600; color:#6D4C41;">RETO ANUAL 2026</div>
+        <div class="kpi-val">{leidos_count} de 12 📚</div>
+        <div style="font-size:0.8rem; color:#8D6E63;">🔥 Racha activa: 4 días</div>
+    </div>
+    """, unsafe_allow_html=True)
+with k4:
+    estrellas_txt = "⭐" * int(st.session_state['estrellas_perilla'])
+    st.markdown(f"""
+    <div class="kpi-card">
+        <div style="font-size:0.8rem; font-weight:600; color:#6D4C41;">PERILLA FÍSICA (WOKWI)</div>
+        <div class="kpi-val">{estrellas_txt}</div>
+        <div style="font-size:0.8rem; color:#8D6E63;">{st.session_state['estrellas_perilla']} de 5 estrellas</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+st.write("")
+st.markdown("### 🌸 Dos mundos que se hablan (Capítulos 4 y 6)")
+
+c1, c2, c3 = st.columns(3)
+with c1:
+    st.markdown("""
+    <div class="card-cozy">
+        <h3>📚 1. Mi biblioteca</h3>
+        <p style="color:#6D4C41; font-size:0.93rem;">
+            Sube la foto de la portada (como <b>María de Jorge Isaacs</b>), organiza tus estantes 
+            (<i>Leyendo, Quiero leer, Leídos</i>), califica con la perilla física y revisa tu avance del reto 2026 con gráficas.
+        </p>
     </div>
     """, unsafe_allow_html=True)
 with c2:
-    st.markdown(f"""
-    <div class="metric-pill">
-        <div style="font-size:0.8rem; text-transform:uppercase; letter-spacing:0.08em; color:#8C624C;">Tiempo de Lectura</div>
-        <div class="metric-number">{st.session_state['minutos_leidos']} min</div>
+    st.markdown("""
+    <div class="card-cozy">
+        <h3>⏱️ 2. Sesión de lectura</h3>
+        <p style="color:#6D4C41; font-size:0.93rem;">
+            Elige tu libro para mostrarlo en el LCD, di por voz <b>"voy a leer romance"</b> para llenar la matriz 
+            de corazones (o lunas, estrellas y destellos) y cronometra tu tiempo con el botón físico.
+        </p>
     </div>
     """, unsafe_allow_html=True)
 with c3:
-    st.markdown(f"""
-    <div class="metric-pill">
-        <div style="font-size:0.8rem; text-transform:uppercase; letter-spacing:0.08em; color:#8C624C;">Reto Anual 2026</div>
-        <div class="metric-number">{len(st.session_state['libros'])} / 12 📚</div>
-    </div>
-    """, unsafe_allow_html=True)
-with c4:
-    estrellas_str = "★" * int(st.session_state['calificacion_fisica'])
-    st.markdown(f"""
-    <div class="metric-pill">
-        <div style="font-size:0.8rem; text-transform:uppercase; letter-spacing:0.08em; color:#8C624C;">Perilla Física</div>
-        <div class="metric-number" style="color:#D4A373;">{estrellas_str}</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-st.write("")
-st.markdown("### ✨ Experiencias Multimodales")
-
-col1, col2, col3 = st.columns(3)
-with col1:
     st.markdown("""
-    <div class="luxe-card">
-        <img src="https://images.unsplash.com/photo-1519682337058-a94d519337bc?auto=format&fit=crop&w=600&q=80" style="width:100%; height:150px; object-fit:cover; border-radius:14px; margin-bottom:15px;">
-        <h3>🏛️ I. Mi Biblioteca</h3>
-        <p style="color:#6E5644; font-size:0.92rem; line-height:1.5;">
-            Colecciona tus lecturas actuales, registra tus portadas favoritas y recibe la calificación en estrellas directamente desde el potenciómetro físico de tu estación.
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
-
-with col2:
-    st.markdown("""
-    <div class="luxe-card">
-        <img src="https://images.unsplash.com/photo-1513519245088-0e12902e5a38?auto=format&fit=crop&w=600&q=80" style="width:100%; height:150px; object-fit:cover; border-radius:14px; margin-bottom:15px;">
-        <h3>🕯️ II. Sesión por Voz</h3>
-        <p style="color:#6E5644; font-size:0.92rem; line-height:1.5;">
-            Dile a BookNook qué género vas a leer (<i>Romance, Misterio o Ciencia Ficción</i>) y observa cómo la matriz LED de tu escritorio dibuja corazones, lunas o estrellas.
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
-
-with col3:
-    st.markdown("""
-    <div class="luxe-card">
-        <img src="https://images.unsplash.com/photo-1457369804613-52c61a468e7d?auto=format&fit=crop&w=600&q=80" style="width:100%; height:150px; object-fit:cover; border-radius:14px; margin-bottom:15px;">
-        <h3>🎧 III. Página que Habla</h3>
-        <p style="color:#6E5644; font-size:0.92rem; line-height:1.5;">
-            ¿Ocupada mientras cocinas o descansas? Captura una foto de la página de tu libro; nuestro motor OCR extraerá el texto y lo narrará con voz cálida para ti.
+    <div class="card-cozy">
+        <h3>📸 3. Página que habla</h3>
+        <p style="color:#6D4C41; font-size:0.93rem;">
+            ¿Te toca cocinar o tienes las manos ocupadas? Tómale foto o screenshot a la página, 
+            extrae el texto con <b>OCR</b>, escúchala en voz alta con <b>gTTS</b> y guarda tus citas favoritas.
         </p>
     </div>
     """, unsafe_allow_html=True)
 
 st.write("")
-if 'ultimo_mensaje' in st.session_state:
-    st.markdown(f"""
-    <div class="luxe-card" style="background: linear-gradient(90deg, #EFE5DC 0%, #FAF6F0 100%); border-left: 5px solid #8C624C; padding: 18px 24px;">
-        <strong>📡 Telemetría en vivo desde Wokwi (`booknook/estacion`):</strong> 
-        <code style="background:#FFF; padding:4px 10px; border-radius:8px; color:#5E3A24;">{st.session_state['ultimo_mensaje']}</code>
-    </div>
-    """, unsafe_allow_html=True)
-
-if st.button("🔄 Actualizar telemetría de la estación"):
-    st.rerun()
+if 'raw_mqtt' in st.session_state:
+    st.info(f"📡 **Último mensaje recibido desde la estación Wokwi (`booknook/estacion`):** `{st.session_state['raw_mqtt']}`")
