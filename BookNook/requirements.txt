@@ -1,6 +1,143 @@
-streamlit
-paho-mqtt<2.0.0
-SpeechRecognition
-gTTS
-pytesseract
-Pillow
+#include <WiFi.h>
+#include <PubSubClient.h>
+#include <LiquidCrystal_I2C.h>
+#include <ArduinoJson.h>
+#include <MD_MAX72xx.h>
+#include <SPI.h>
+
+#define HARDWARE_TYPE MD_MAX72XX::PAROLA_HW
+#define MAX_DEVICES 4
+#define CLK_PIN   18
+#define DATA_PIN  23
+#define CS_PIN    5
+
+MD_MAX72XX mx = MD_MAX72XX(HARDWARE_TYPE, DATA_PIN, CLK_PIN, CS_PIN, MAX_DEVICES);
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+
+const char* ssid = "Wokwi-GUEST";
+const char* password = "";
+const char* mqtt_server = "broker.mqttdashboard.com";
+
+WiFiClient espClient;
+PubSubClient client(espClient);
+
+const int botonPin = 14;
+const int potPin = 34;
+int estadoBotonAnterior = HIGH;
+bool leyendo = false;
+int estrellasAnterior = -1;
+
+// Iconos 8x8 para la Matriz LED
+byte corazon[8] = {0x00, 0x66, 0xFF, 0xFF, 0xFF, 0x7E, 0x3C, 0x18};
+byte misterio[8] = {0x3C, 0x7E, 0xE7, 0xC3, 0xC3, 0xE7, 0x7E, 0x3C};
+byte estrella[8] = {0x18, 0x18, 0xFF, 0x7E, 0x3C, 0x7E, 0x66, 0x00};
+
+void mostrarFigura(byte figura[8]) {
+  mx.clear();
+  for (int d = 0; d < MAX_DEVICES; d++) {
+    for (int i = 0; i < 8; i++) {
+      mx.setRow(d, i, figura[i]);
+    }
+  }
+}
+
+void setup_wifi() {
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) { delay(500); }
+}
+
+void callback(char* topic, byte* payload, unsigned int length) {
+  String message;
+  for (unsigned int i = 0; i < length; i++) { message += (char)payload[i]; }
+  
+  StaticJsonDocument<256> doc;
+  if (!deserializeJson(doc, message)) {
+    if (doc.containsKey("libro")) {
+      lcd.clear();
+      lcd.setCursor(0, 0);
+      lcd.print("Leyendo:");
+      lcd.setCursor(0, 1);
+      lcd.print(doc["libro"].as<String>());
+    }
+    if (doc.containsKey("genero")) {
+      String gen = doc["genero"].as<String>();
+      lcd.clear();
+      lcd.setCursor(0, 0);
+      lcd.print("Ambiente LED:");
+      lcd.setCursor(0, 1);
+      lcd.print(gen);
+      if (gen.indexOf("romance") >= 0) mostrarFigura(corazon);
+      else if (gen.indexOf("misterio") >= 0) mostrarFigura(misterio);
+      else mostrarFigura(estrella);
+    }
+  }
+}
+
+void reconnect() {
+  while (!client.connected()) {
+    String clientId = "BookNook-ESP32-" + String(random(0, 9999));
+    if (client.connect(clientId.c_str())) {
+      client.subscribe("booknook/app");
+    } else {
+      delay(2000);
+    }
+  }
+}
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(botonPin, INPUT_PULLUP);
+  
+  mx.begin();
+  mx.control(MD_MAX72XX::INTENSITY, 8);
+  mx.clear();
+  mostrarFigura(corazon);
+
+  lcd.init();
+  lcd.backlight();
+  lcd.setCursor(0, 0);
+  lcd.print("BookNook Listo!");
+  
+  setup_wifi();
+  client.setServer(mqtt_server, 1883);
+  client.setCallback(callback);
+}
+
+void loop() {
+  if (!client.connected()) { reconnect(); }
+  client.loop();
+
+  // 1. Botón de inicio/pausa de sesión
+  int estadoBoton = digitalRead(botonPin);
+  if (estadoBoton == LOW && estadoBotonAnterior == HIGH) {
+    leyendo = !leyendo;
+    StaticJsonDocument<200> doc;
+    doc["evento"] = leyendo ? "inicio" : "fin";
+    
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print(leyendo ? "Sesion Iniciada" : "Sesion Pausada");
+    
+    char buffer[256];
+    serializeJson(doc, buffer);
+    client.publish("booknook/estacion", buffer);
+    delay(300);
+  }
+  estadoBotonAnterior = estadoBoton;
+
+  // 2. Perilla (Potenciómetro) para calificar de 1 a 5 estrellas
+  int valorPot = analogRead(potPin);
+  int estrellas = map(valorPot, 0, 4095, 1, 5);
+  if (abs(estrellas - estrellasAnterior) >= 1 && estrellasAnterior != -1) {
+    StaticJsonDocument<200> doc;
+    doc["estrellas"] = estrellas;
+    char buffer[256];
+    serializeJson(doc, buffer);
+    client.publish("booknook/estacion", buffer);
+    
+    lcd.setCursor(0, 1);
+    lcd.print("Rating: " + String(estrellas) + " est.  ");
+    delay(250);
+  }
+  estrellasAnterior = estrellas;
+}
